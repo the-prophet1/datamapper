@@ -1,0 +1,61 @@
+sourceType: json
+targetType: json
+source: #南向 元数据定义
+  id:
+    type: simple
+    typeRef: string
+    multiple: false
+  description:
+    type: simple
+    typeRef: string
+    multiple: false
+  data:
+    type: complex
+    typeRef: data
+    multiple: false
+target: #北向 元数据定义
+  id:
+    type: simple
+    typeRef: string
+    multiple: false
+  description:
+    type: simple
+    typeRef: string
+    multiple: false
+  va:
+    type: complex
+    typeRef: va
+    multiple: false
+  P:
+    type: simple
+    typeRef: number
+    multiple: false
+mapper: #南北 元数据映射
+  id: id
+  description: description
+  data.voltage: va.V
+  data.current: va.A
+  data.power: P
+complex:
+  data:
+    voltage:
+      type: simple
+      typeRef: number
+      multiple: true
+    current:
+      type: simple
+      typeRef: number
+      multiple: true
+    power:
+      type: simple
+      typeRef: number
+      multiple: false
+  va:
+    V:
+      type: simple
+      typeRef: number
+      multiple: false
+    A:
+      type: simple
+      typeRef: number
+      multiple: false

@@ -1,0 +1,50 @@
+sourceType: json
+targetType: json
+source: #南向 元数据定义
+  id:
+    type: simple
+    typeRef: string
+    multiple: false
+  description:
+    type: simple
+    typeRef: string
+    multiple: false
+  voltage:
+    type: simple
+    typeRef: number
+    multiple: false
+  ampere:
+    type: simple
+    typeRef: number
+    multiple: false
+  power:
+    type: simple
+    typeRef: number
+    multiple: false
+target: #北向 元数据定义
+  id:
+    type: simple
+    typeRef: string
+    multiple: false
+  description:
+    type: simple
+    typeRef: string
+    multiple: false
+  V:
+    type: simple
+    typeRef: number
+    multiple: false
+  A:
+    type: simple
+    typeRef: number
+    multiple: false
+  P:
+    type: simple
+    typeRef: number
+    multiple: false
+mapper: #南北 元数据映射
+  id: id
+  description: description
+  voltage: V
+  ampere: A
+  power: P

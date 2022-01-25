@@ -1,4 +1,4 @@
-package main
+package datamapper
 
 import (
 	"encoding/json"
@@ -13,15 +13,31 @@ import (
 
 var logger *log.Logger
 
+type number float64
+
+const (
+	Number2Number = iota
+	Number2String
+	String2Number
+	String2String
+
+	Numbers2Numbers
+	Numbers2Strings
+	Strings2Numbers
+	Strings2Strings
+)
+
 func init() {
 	logger = log.New()
 	logger.SetReportCaller(true)
 }
 
+//Specification 实现该接口用以完成从持久层获取对应得规格信息
 type Specification interface {
 	Get(name string) ([]byte, error)
 }
 
+//NewSpecification 默认返回一个从文件中读取规格信息的读取器
 func NewSpecification() Specification {
 	return &FileReader{}
 }
@@ -45,6 +61,7 @@ type DataSpec struct {
 	Type     string `yaml:"type"`
 	TypeRef  string `yaml:"typeRef"`
 	Multiple string `yaml:"multiple"`
+	Count    int
 }
 
 type ComplexDefine map[string]*DataSpec
@@ -115,42 +132,221 @@ func (d *DataDefine) To(input []byte) ([]byte, error) {
 
 	sourceMap := d.ParseSource(d.Source, inputMap)
 	targetMap := d.generateMap(d.Target)
-	d.mapping(sourceMap,targetMap)
+	d.mapping(sourceMap, targetMap)
 
-	logger.Debug(sourceMap)
-	logger.Debug(targetMap)
-	return nil, nil
+	return json.Marshal(targetMap)
+}
+
+func getSourceData(sourceMap map[string]interface{}, paths []string) interface{} {
+	var res interface{}
+	if len(paths) == 0 {
+		return nil
+	}
+	//从path中获取对应的value值
+	val, ok := sourceMap[paths[0]]
+	if !ok {
+		// 搜寻路径中不存在对应的值
+		return res
+	}
+
+	switch val.(type) {
+	case float64, string, []float64, []string:
+		res = val
+	case map[string]interface{}:
+		res = getSourceData(val.(map[string]interface{}), paths[1:])
+	case []map[string]interface{}:
+		sli := make([]interface{}, 0)
+		for _, m := range val.([]map[string]interface{}) {
+			sli = append(sli, getSourceData(m, paths[1:]))
+		}
+		res = sli
+	}
+
+	return res
+}
+
+func getTargetData(targetMap map[string]*interface{}, paths []string, length int) *interface{} {
+	var res *interface{}
+	if len(paths) == 0 {
+		return nil
+	}
+
+	val, ok := targetMap[paths[0]]
+	if !ok {
+		// 搜寻路径中不存在对应的值
+		return res
+	}
+
+	switch (*val).(type) {
+	case float64, string, []float64, []string:
+		res = val
+	case map[string]*interface{}:
+		res = getTargetData((*val).(map[string]*interface{}), paths[1:], length)
+	case []map[string]*interface{}:
+		// 扩展对象数组
+		sli := (*val).([]map[string]*interface{})
+		if len(sli) != length {
+			for i := 0; i < length-1; i++ {
+				sli = append(sli, Clone(sli[0]).(map[string]*interface{}))
+			}
+			// 将拓展对象数组复制给targetMap
+			*val = sli
+		}
+		slip := make([]*interface{}, 0)
+		for _, m := range sli {
+			slip = append(slip, getTargetData(m, paths[1:], length))
+		}
+		var iface interface{} = slip
+		res = &iface
+	}
+
+	return res
+}
+
+func Clone(source interface{}) interface{} {
+	typ := reflect.TypeOf(source)
+	if typ.Kind() == reflect.Ptr { //如果是指针类型
+		typ = typ.Elem()                          //获取源实际类型(否则为指针类型)
+		dst := reflect.New(typ).Elem()            //创建对象
+		b, _ := json.Marshal(source)              //导出json
+		json.Unmarshal(b, dst.Addr().Interface()) //json序列化
+		return dst.Addr().Interface()             //返回指针
+	} else {
+		dst := reflect.New(typ).Elem()            //创建对象
+		b, _ := json.Marshal(source)              //导出json
+		json.Unmarshal(b, dst.Addr().Interface()) //json序列化
+		return dst.Interface()                    //返回值
+	}
 }
 
 func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[string]*interface{}) {
 
 	for source, target := range d.Mapper {
 		sourcePaths := strings.Split(source, ".")
-		sourceData := sourceMap[sourcePaths[0]]
 
-		for i := 1; i < len(sourcePaths); i++ {
-			switch sourceData.(type) {
-			case map[string]interface{}:
-				sourceData = sourceData.(map[string]interface{})[sourcePaths[i]]
+		sourceData := getSourceData(sourceMap, sourcePaths)
+
+		// 当sourceData为[]interface{}，根据类型将其转为[]float64 或[]string
+		switch sourceData.(type) {
+		case []interface{}:
+			sli := sourceData.([]interface{})
+			if len(sli) > 0 {
+				switch sli[0].(type) {
+				case string:
+					res := make([]string, 0)
+					for _, i := range sli {
+						res = append(res, i.(string))
+					}
+					sourceData = res
+				case float64:
+					res := make([]float64, 0)
+					for _, i := range sli {
+						res = append(res, i.(float64))
+					}
+					sourceData = res
+				}
 			}
+		}
+
+		length := 0
+		switch sourceData.(type) {
+		case []float64:
+			length = len(sourceData.([]float64))
+		case []string:
+			length = len(sourceData.([]string))
 		}
 
 		targetPaths := strings.Split(target, ".")
-		targetData := targetMap[targetPaths[0]]
+		targetData := getTargetData(targetMap, targetPaths, length)
 
-		for i := 1; i < len(targetPaths); i++ {
-			switch (*targetData).(type) {
-			case map[string]*interface{}:
-				var val interface{} = (*targetData).(map[string]*interface{})
-				targetData = &val
+		// 此时sourceData和targetData必须为简单类型
+
+		_, sourceOk := sourceData.(float64)
+		_, targetOk := (*targetData).(float64)
+		// 当都为float64
+		if sourceOk && targetOk {
+			*targetData = sourceData
+		}
+
+		_, sourceOk = sourceData.(float64)
+		_, targetOk = (*targetData).(string)
+		// source: float64,target: string
+		if sourceOk && targetOk {
+			*targetData = strconv.FormatFloat(sourceData.(float64), 'f', -1, 64)
+		}
+
+		_, sourceOk = sourceData.(string)
+		_, targetOk = (*targetData).(float64)
+		// source: string,target: float
+		if sourceOk && targetOk {
+			*targetData, _ = strconv.ParseFloat(sourceData.(string), 64)
+		}
+
+		_, sourceOk = sourceData.(string)
+		_, targetOk = (*targetData).(string)
+		// 当都为string
+		if sourceOk && targetOk {
+			*targetData = sourceData
+		}
+
+		_, sourceOk = sourceData.([]float64)
+		_, targetOk = (*targetData).([]float64)
+		// 当都为[]float64
+		if sourceOk && targetOk {
+			*targetData = sourceData
+		}
+
+		_, sourceOk = sourceData.([]float64)
+		_, targetOk = (*targetData).([]string)
+		// source: float64,target: string
+		if sourceOk && targetOk {
+			sli := make([]string, 0)
+			for _, f := range sourceData.([]float64) {
+				sf := strconv.FormatFloat(f, 'f', -1, 64)
+				sli = append(sli, sf)
+			}
+			*targetData = sli
+		}
+
+		_, sourceOk = sourceData.([]string)
+		_, targetOk = (*targetData).([]float64)
+		// source: []string,target: []float64
+		if sourceOk && targetOk {
+			sli := make([]float64, 0)
+			for _, s := range sourceData.([]string) {
+				sf, _ := strconv.ParseFloat(s, 64)
+				sli = append(sli, sf)
+			}
+			*targetData = sli
+		}
+
+		_, sourceOk = sourceData.([]string)
+		_, targetOk = (*targetData).([]string)
+		// 当都为[]float64
+		if sourceOk && targetOk {
+			*targetData = sourceData
+		}
+
+		sf, sourceOk := sourceData.([]float64)
+		t, targetOk := (*targetData).([]*interface{})
+		// 当source为[]float64,target为[]*interface{}
+		if sourceOk && targetOk {
+			for i, f := range sf {
+				*t[i] = f
 			}
 		}
-		*targetData = sourceData
+
+		ss, sourceOk := sourceData.([]string)
+		t, targetOk = (*targetData).([]*interface{})
+		// 当source为[]string,target为[]*interface{}
+		if sourceOk && targetOk {
+			for i, f := range ss {
+				*t[i] = f
+			}
+		}
 	}
 }
 
-
-//
 func (d *DataDefine) generateMap(complexDefine ComplexDefine) map[string]*interface{} {
 	res := make(map[string]*interface{})
 	for key, def := range complexDefine {
@@ -177,7 +373,7 @@ func (d *DataDefine) generateMap(complexDefine ComplexDefine) map[string]*interf
 			}
 		} else {
 			if def.IsComplex() {
-				var val interface{}  = d.generateMap(d.Complex[def.TypeRef])
+				var val interface{} = d.generateMap(d.Complex[def.TypeRef])
 				res[key] = &val
 			}
 			if def.IsSimple() {
@@ -216,9 +412,23 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						sliMap := inValue.([]map[string]interface{})
 						slim := make([]map[string]interface{}, 0)
 						for _, m := range sliMap {
-							e := d.ParseSource(d.Complex[key], m)
+							e := d.ParseSource(d.Complex[def.TypeRef], m)
 							slim = append(slim, e)
 						}
+						def.Count = len(slim)
+						res[key] = slim
+					case []interface{}:
+						sliMap := inValue.([]interface{})
+						slim := make([]map[string]interface{}, 0)
+						for _, v := range sliMap {
+							m, ok := v.(map[string]interface{})
+							if !ok {
+								continue
+							}
+							e := d.ParseSource(d.Complex[def.TypeRef], m)
+							slim = append(slim, e)
+						}
+						def.Count = len(slim)
 						res[key] = slim
 					default:
 						logger.Warn()
@@ -235,12 +445,14 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 							for _, i := range is {
 								strs = append(strs, i.(string))
 							}
+							def.Count = len(strs)
 							inValue = strs
 						} else if elemTyp == reflect.Float64 {
 							fs := make([]float64, 0)
 							for _, i := range is {
 								fs = append(fs, i.(float64))
 							}
+							def.Count = len(fs)
 							inValue = fs
 						}
 					}
@@ -285,7 +497,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 					switch inValue.(type) {
 					case map[string]interface{}:
 						m := inValue.(map[string]interface{})
-						c := d.ParseSource(d.Complex[key], m)
+						c := d.ParseSource(d.Complex[def.TypeRef], m)
 						sli := make([]map[string]interface{}, 0)
 						res[key] = append(sli, c)
 					default:
@@ -327,7 +539,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						if len(slim) == 0 {
 							res[key] = nil
 						} else {
-							res[key] = d.ParseSource(d.Complex[key], slim[0])
+							res[key] = d.ParseSource(d.Complex[def.TypeRef], slim[0])
 						}
 					default:
 						logger.Warn()
@@ -373,7 +585,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 					switch inValue.(type) {
 					case map[string]interface{}:
 						m := inValue.(map[string]interface{})
-						c := d.ParseSource(d.Complex[key], m)
+						c := d.ParseSource(d.Complex[def.TypeRef], m)
 						res[key] = c
 					default:
 						logger.Warn()
@@ -408,12 +620,4 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 		}
 	}
 	return res
-}
-
-func main() {
-
-	data, _ := NewSpecification().Get("ammeter.yaml")
-	dataDefine, _ := GenerateDataDefine(data)
-	dataDefine.To([]byte(`{"id":"电表1","description":"描述","data":{"voltage":[220,180],"current":["10","10"],"power":2200}}`))
-
 }

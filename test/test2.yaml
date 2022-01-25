@@ -12,7 +12,7 @@ source: #南向 元数据定义
   data:
     type: complex
     typeRef: data
-    multiple: false
+    multiple: true
 target: #北向 元数据定义
   id:
     type: simple
@@ -25,27 +25,17 @@ target: #北向 元数据定义
   va:
     type: complex
     typeRef: va
-    multiple: false
-  P:
-    type: simple
-    typeRef: number
-    multiple: false
-mapper: #南北 元数据映射
-  id: id
-  description: description
-  data.voltage: va.V
-  data.current: va.A
-  data.power: P
+    multiple: true
 complex:
   data:
     voltage:
       type: simple
       typeRef: number
-      multiple: true
+      multiple: false
     current:
       type: simple
       typeRef: number
-      multiple: true
+      multiple: false
     power:
       type: simple
       typeRef: number
@@ -59,3 +49,13 @@ complex:
       type: simple
       typeRef: number
       multiple: false
+    P:
+      type: simple
+      typeRef: number
+      multiple: false
+mapper: #南北 元数据映射
+  id: id
+  description: description
+  data.voltage: va.V
+  data.current: va.A
+  data.power: va.P

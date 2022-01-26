@@ -1,6 +1,6 @@
 sourceType: json
 targetType: json
-source: #南向 元数据定义
+source: #来源元数据定义
   msg:
     type: simple
     typeRef: string
@@ -29,7 +29,7 @@ source: #南向 元数据定义
     type: simple
     typeRef: number
     multiple: false
-target: #北向 元数据定义
+target: #目标元数据定义
   id:
     type: simple
     typeRef: string
@@ -110,7 +110,7 @@ complex:
       type: simple
       typeRef: number
       multiple: false
-mapper: #南北 元数据映射
+mapper: #元数据映射
   messageId: id
   code: code
   msg: msg

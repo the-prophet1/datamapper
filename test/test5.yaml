@@ -1,0 +1,119 @@
+sourceType: json
+targetType: json
+source: #来源元数据定义
+  msg:
+    type: simple
+    typeRef: string
+    multiple: false
+  headers:
+    type: complex
+    typeRef: string
+    multiple: false
+  code:
+    type: simple
+    typeRef: string
+    multiple: false
+  fromMessageId:
+    type: simple
+    typeRef: string
+    multiple: false
+  messageId:
+    type: simple
+    typeRef: string
+    multiple: false
+  properties:
+    type: complex
+    typeRef: property
+    multiple: true
+  timestamp:
+    type: simple
+    typeRef: number
+    multiple: false
+target: #目标元数据定义
+  id:
+    type: simple
+    typeRef: string
+    multiple: false
+  code:
+    type: simple
+    typeRef: string
+    multiple: false
+  msg:
+    type: simple
+    typeRef: string
+    multiple: false
+  names:
+    type: simple
+    typeRef: string
+    multiple: true
+  vals:
+    type: simple
+    typeRef: string
+    multiple: true
+  plugName:
+    type: simple
+    typeRef: string
+    multiple: true
+complex:
+  headers:
+    qos:
+      type: simple
+      typeRef: number
+      multiple: false
+    oneofCase:
+      type: simple
+      typeRef: number
+      multiple: false
+    token:
+      type: simple
+      typeRef: string
+      multiple: false
+  property:
+    val:
+      type: simple
+      typeRef: string
+      multiple: false
+    name:
+      type: simple
+      typeRef: string
+      multiple: false
+    time:
+      type: simple
+      typeRef: string
+      multiple: false
+    desc:
+      type: complex
+      typeRef: desc
+      multiple: false
+  desc:
+    uint:
+      type: simple
+      typeRef: string
+      multiple: false
+    plugName:
+      type: simple
+      typeRef: string
+      multiple: false
+    source:
+      type: simple
+      typeRef: string
+      multiple: false
+    type:
+      type: simple
+      typeRef: string
+      multiple: false
+    group:
+      type: simple
+      typeRef: string
+      multiple: false
+    quality:
+      type: simple
+      typeRef: number
+      multiple: false
+mapper: #元数据映射
+  messageId: id
+  code: code
+  msg: msg
+  properties.name: names
+  properties.val: vals
+  properties.desc.plugName: plugName

@@ -13,19 +13,7 @@ import (
 
 var logger *log.Logger
 
-type number float64
-
-const (
-	Number2Number = iota
-	Number2String
-	String2Number
-	String2String
-
-	Numbers2Numbers
-	Numbers2Strings
-	Strings2Numbers
-	Strings2Strings
-)
+type number = float64
 
 func init() {
 	logger = log.New()
@@ -42,8 +30,10 @@ func NewSpecification() Specification {
 	return &FileReader{}
 }
 
+//FileReader 实现了Specification接口，用于从文件中读取对应的数据
 type FileReader struct{}
 
+//Get Specification接口的一种实现。用于从文件中读取数据
 func (FileReader) Get(name string) ([]byte, error) {
 	f, err := os.Open(name)
 	if err != nil {
@@ -57,15 +47,19 @@ func (FileReader) Get(name string) ([]byte, error) {
 	return res, nil
 }
 
+//DataSpec 数据的规格说明
 type DataSpec struct {
 	Type     string `yaml:"type"`
 	TypeRef  string `yaml:"typeRef"`
 	Multiple string `yaml:"multiple"`
-	Count    int
+	//当输入的Multiple=true时，用于实时计算输入的数据的个数
+	Count int `yaml:"-"`
 }
 
+//ComplexDefine 复杂数据的声明结构
 type ComplexDefine map[string]*DataSpec
 
+//DataDefine 数据定义结构体
 type DataDefine struct {
 	SourceType string                   `yaml:"sourceType"`
 	TargetType string                   `yaml:"targetType"`
@@ -75,6 +69,7 @@ type DataDefine struct {
 	Complex    map[string]ComplexDefine `yaml:"complex"`
 }
 
+//GenerateDataDefine 根据输入的yaml数据流生成对应的DataDefine
 func GenerateDataDefine(data []byte) (*DataDefine, error) {
 	var define DataDefine
 	if err := yaml.Unmarshal(data, &define); err != nil {
@@ -83,6 +78,7 @@ func GenerateDataDefine(data []byte) (*DataDefine, error) {
 	return &define, nil
 }
 
+//IsNumber 判断数据规格是否为number
 func (d *DataSpec) IsNumber() bool {
 	if d.TypeRef == "number" {
 		return true
@@ -90,6 +86,7 @@ func (d *DataSpec) IsNumber() bool {
 	return false
 }
 
+//IsString 判断数据规格是否为string
 func (d *DataSpec) IsString() bool {
 	if d.TypeRef == "string" {
 		return true
@@ -97,6 +94,7 @@ func (d *DataSpec) IsString() bool {
 	return false
 }
 
+//IsComplex 判断数据规格是否为complex
 func (d *DataSpec) IsComplex() bool {
 	if d.Type == "complex" {
 		return true
@@ -104,6 +102,7 @@ func (d *DataSpec) IsComplex() bool {
 	return false
 }
 
+//IsSimple 判断数据规格是否为simple
 func (d *DataSpec) IsSimple() bool {
 	if d.Type == "simple" {
 		return true
@@ -111,6 +110,7 @@ func (d *DataSpec) IsSimple() bool {
 	return false
 }
 
+//IsArray 判断数据规格是否为array
 func (d *DataSpec) IsArray() bool {
 	if d.Multiple == "true" {
 		return true
@@ -150,7 +150,7 @@ func getSourceData(sourceMap map[string]interface{}, paths []string) interface{}
 	}
 
 	switch val.(type) {
-	case float64, string, []float64, []string:
+	case number, string, []number, []string:
 		res = val
 	case map[string]interface{}:
 		res = getSourceData(val.(map[string]interface{}), paths[1:])
@@ -178,7 +178,7 @@ func getTargetData(targetMap map[string]*interface{}, paths []string, length int
 	}
 
 	switch (*val).(type) {
-	case float64, string, []float64, []string:
+	case number, string, []number, []string:
 		res = val
 	case map[string]*interface{}:
 		res = getTargetData((*val).(map[string]*interface{}), paths[1:], length)
@@ -203,6 +203,7 @@ func getTargetData(targetMap map[string]*interface{}, paths []string, length int
 	return res
 }
 
+//Clone 复制的source的机构与数据并返回一个新的对象
 func Clone(source interface{}) interface{} {
 	typ := reflect.TypeOf(source)
 	if typ.Kind() == reflect.Ptr { //如果是指针类型
@@ -211,12 +212,11 @@ func Clone(source interface{}) interface{} {
 		b, _ := json.Marshal(source)              //导出json
 		json.Unmarshal(b, dst.Addr().Interface()) //json序列化
 		return dst.Addr().Interface()             //返回指针
-	} else {
-		dst := reflect.New(typ).Elem()            //创建对象
-		b, _ := json.Marshal(source)              //导出json
-		json.Unmarshal(b, dst.Addr().Interface()) //json序列化
-		return dst.Interface()                    //返回值
 	}
+	dst := reflect.New(typ).Elem()            //创建对象
+	b, _ := json.Marshal(source)              //导出json
+	json.Unmarshal(b, dst.Addr().Interface()) //json序列化
+	return dst.Interface()                    //返回值
 }
 
 func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[string]*interface{}) {
@@ -226,7 +226,7 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		sourceData := getSourceData(sourceMap, sourcePaths)
 
-		// 当sourceData为[]interface{}，根据类型将其转为[]float64 或[]string
+		// 当sourceData为[]interface{}，根据类型将其转为[]number 或[]string
 		switch sourceData.(type) {
 		case []interface{}:
 			sli := sourceData.([]interface{})
@@ -238,10 +238,10 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 						res = append(res, i.(string))
 					}
 					sourceData = res
-				case float64:
-					res := make([]float64, 0)
+				case number:
+					res := make([]number, 0)
 					for _, i := range sli {
-						res = append(res, i.(float64))
+						res = append(res, i.(number))
 					}
 					sourceData = res
 				}
@@ -250,8 +250,8 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		length := 0
 		switch sourceData.(type) {
-		case []float64:
-			length = len(sourceData.([]float64))
+		case []number:
+			length = len(sourceData.([]number))
 		case []string:
 			length = len(sourceData.([]string))
 		}
@@ -261,23 +261,23 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		// 此时sourceData和targetData必须为简单类型
 
-		_, sourceOk := sourceData.(float64)
-		_, targetOk := (*targetData).(float64)
+		_, sourceOk := sourceData.(number)
+		_, targetOk := (*targetData).(number)
 		// 当都为float64
 		if sourceOk && targetOk {
 			*targetData = sourceData
 		}
 
-		_, sourceOk = sourceData.(float64)
+		_, sourceOk = sourceData.(number)
 		_, targetOk = (*targetData).(string)
-		// source: float64,target: string
+		// source: number,target: string
 		if sourceOk && targetOk {
-			*targetData = strconv.FormatFloat(sourceData.(float64), 'f', -1, 64)
+			*targetData = strconv.FormatFloat(sourceData.(number), 'f', -1, 64)
 		}
 
 		_, sourceOk = sourceData.(string)
-		_, targetOk = (*targetData).(float64)
-		// source: string,target: float
+		_, targetOk = (*targetData).(number)
+		// source: string,target: number
 		if sourceOk && targetOk {
 			*targetData, _ = strconv.ParseFloat(sourceData.(string), 64)
 		}
@@ -289,19 +289,19 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 			*targetData = sourceData
 		}
 
-		_, sourceOk = sourceData.([]float64)
-		_, targetOk = (*targetData).([]float64)
-		// 当都为[]float64
+		_, sourceOk = sourceData.(number)
+		_, targetOk = (*targetData).([]number)
+		// 当都为[]number
 		if sourceOk && targetOk {
 			*targetData = sourceData
 		}
 
-		_, sourceOk = sourceData.([]float64)
+		_, sourceOk = sourceData.([]number)
 		_, targetOk = (*targetData).([]string)
-		// source: float64,target: string
+		// source: number,target: string
 		if sourceOk && targetOk {
 			sli := make([]string, 0)
-			for _, f := range sourceData.([]float64) {
+			for _, f := range sourceData.([]number) {
 				sf := strconv.FormatFloat(f, 'f', -1, 64)
 				sli = append(sli, sf)
 			}
@@ -309,10 +309,10 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 		}
 
 		_, sourceOk = sourceData.([]string)
-		_, targetOk = (*targetData).([]float64)
-		// source: []string,target: []float64
+		_, targetOk = (*targetData).([]number)
+		// source: []string,target: []number
 		if sourceOk && targetOk {
-			sli := make([]float64, 0)
+			sli := make([]number, 0)
 			for _, s := range sourceData.([]string) {
 				sf, _ := strconv.ParseFloat(s, 64)
 				sli = append(sli, sf)
@@ -322,14 +322,14 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		_, sourceOk = sourceData.([]string)
 		_, targetOk = (*targetData).([]string)
-		// 当都为[]float64
+		// 当都为[]number
 		if sourceOk && targetOk {
 			*targetData = sourceData
 		}
 
-		sf, sourceOk := sourceData.([]float64)
+		sf, sourceOk := sourceData.([]number)
 		t, targetOk := (*targetData).([]*interface{})
-		// 当source为[]float64,target为[]*interface{}
+		// 当source为[]number,target为[]*interface{}
 		if sourceOk && targetOk {
 			for i, f := range sf {
 				*t[i] = f
@@ -359,8 +359,8 @@ func (d *DataDefine) generateMap(complexDefine ComplexDefine) map[string]*interf
 			}
 			if def.IsSimple() {
 				if def.IsNumber() {
-					val := make([]float64, 0)
-					val = append(val, float64(0))
+					val := make([]number, 0)
+					val = append(val, number(0))
 					var vals interface{} = val
 					res[key] = &vals
 				}
@@ -378,7 +378,7 @@ func (d *DataDefine) generateMap(complexDefine ComplexDefine) map[string]*interf
 			}
 			if def.IsSimple() {
 				if def.IsNumber() {
-					var val interface{} = float64(0)
+					var val interface{} = number(0)
 					res[key] = &val
 				}
 				if def.IsString() {
@@ -431,7 +431,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						def.Count = len(slim)
 						res[key] = slim
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 				if def.IsSimple() { // 此时数据类型为简单类型
@@ -448,9 +448,9 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 							def.Count = len(strs)
 							inValue = strs
 						} else if elemTyp == reflect.Float64 {
-							fs := make([]float64, 0)
+							fs := make([]number, 0)
 							for _, i := range is {
-								fs = append(fs, i.(float64))
+								fs = append(fs, i.(number))
 							}
 							def.Count = len(fs)
 							inValue = fs
@@ -464,31 +464,31 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						}
 						if def.IsNumber() {
 							// 类型不匹配，尝试将string转为float
-							slif := make([]float64, 0)
+							slif := make([]number, 0)
 							for _, s := range inValue.([]string) {
 								f, err := strconv.ParseFloat(s, 64)
 								if err != nil {
-									log.Warn()
+									logger.Warn(err)
 								}
 								slif = append(slif, f)
 							}
 							res[key] = slif
 						}
-					case []float64:
+					case []number:
 						if def.IsNumber() {
 							res[key] = inValue
 						}
 						if def.IsString() {
 							// 类型不匹配，尝试将float转为string
 							slis := make([]string, 0)
-							for _, f := range inValue.([]float64) {
+							for _, f := range inValue.([]number) {
 								s := strconv.FormatFloat(f, 'f', -1, 64)
 								slis = append(slis, s)
 							}
 							res[key] = slis
 						}
 					default:
-						logger.Warn("")
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 			} else {
@@ -501,7 +501,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						sli := make([]map[string]interface{}, 0)
 						res[key] = append(sli, c)
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 				if def.IsSimple() {
@@ -513,20 +513,20 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						if def.IsNumber() {
 							f, err := strconv.ParseFloat(inValue.(string), 64)
 							if err != nil {
-								log.Warn(err)
+								logger.Warn(err)
 							}
-							res[key] = []float64{f}
+							res[key] = []number{f}
 						}
-					case float64:
+					case number:
 						if def.IsNumber() {
-							res[key] = []float64{inValue.(float64)}
+							res[key] = []number{inValue.(number)}
 						}
 						if def.IsString() {
-							s := strconv.FormatFloat(inValue.(float64), 'f', -1, 64)
+							s := strconv.FormatFloat(inValue.(number), 'f', -1, 64)
 							res[key] = []string{s}
 						}
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 			}
@@ -542,7 +542,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 							res[key] = d.ParseSource(d.Complex[def.TypeRef], slim[0])
 						}
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 				if def.IsSimple() {
@@ -558,13 +558,13 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 							if def.IsNumber() {
 								f, err := strconv.ParseFloat(strs[0], 64)
 								if err != nil {
-									log.Warn(err)
+									logger.Warn(err)
 								}
 								res[key] = f
 							}
 						}
-					case []float64:
-						floats := inValue.([]float64)
+					case []number:
+						floats := inValue.([]number)
 						if len(floats) == 0 {
 							res[key] = nil
 						} else {
@@ -577,7 +577,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 							}
 						}
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 			} else {
@@ -588,7 +588,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						c := d.ParseSource(d.Complex[def.TypeRef], m)
 						res[key] = c
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 				if def.IsSimple() {
@@ -600,20 +600,20 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						if def.IsNumber() {
 							f, err := strconv.ParseFloat(inValue.(string), 64)
 							if err != nil {
-								log.Warn(err)
+								logger.Warn(err)
 							}
 							res[key] = f
 						}
-					case float64:
+					case number:
 						if def.IsNumber() {
-							res[key] = inValue.(float64)
+							res[key] = inValue.(number)
 						}
 						if def.IsString() {
-							s := strconv.FormatFloat(inValue.(float64), 'f', -1, 64)
+							s := strconv.FormatFloat(inValue.(number), 'f', -1, 64)
 							res[key] = s
 						}
 					default:
-						logger.Warn()
+						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 			}

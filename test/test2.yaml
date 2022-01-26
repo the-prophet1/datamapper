@@ -1,6 +1,6 @@
 sourceType: json
 targetType: json
-source: #南向 元数据定义
+source: #来源元数据定义
   id:
     type: simple
     typeRef: string
@@ -13,7 +13,7 @@ source: #南向 元数据定义
     type: complex
     typeRef: data
     multiple: true
-target: #北向 元数据定义
+target: #目标元数据定义
   id:
     type: simple
     typeRef: string
@@ -53,7 +53,7 @@ complex:
       type: simple
       typeRef: number
       multiple: false
-mapper: #南北 元数据映射
+mapper: #元数据映射
   id: id
   description: description
   data.voltage: va.V

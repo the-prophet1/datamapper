@@ -2,9 +2,9 @@ package datamapper
 
 import (
 	"encoding/json"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"testing"
 )
 
@@ -44,7 +44,22 @@ var mapperTest = []TestStruct{
 		"test4",
 		Spec("./test/test4.yaml"),
 		`{"msg":"成功","headers":{"qos":1,"oneofCase":5,"token":"kCBQLBlvOp+9fOsRWKN3VD6V5DSNgnpNnU2U1M6cOYg="},"code":"SUCCESS","fromMessageId":"","messageId":"f09856be6ae947a79ca21d24a33e7239","properties":[{"val":"7.00","name":"CPU使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}}],"timestamp":1642757411915}`,
-		``,
+		`{"id":"f09856be6ae947a79ca21d24a33e7239","code":"SUCCESS","msg":"成功","names":["CPU使用率"],"vals":["7.00"],"plugName":["sysinfo"]}`,
+	},
+	{
+		"test5",
+		Spec("./test/test5.yaml"),
+		`{"msg":"成功","headers":{"qos":1,"oneofCase":5,"token":"kCBQLBlvOp+9fOsRWKN3VD6V5DSNgnpNnU2U1M6cOYg="},"code":"SUCCESS","fromMessageId":"","messageId":"f09856be6ae947a79ca21d24a33e7239","properties":[{"val":"7.00","name":"CPU使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}},{"val":"10.00","name":"内存使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}}],"timestamp":1642757411915}`,
+		`{"id":"f09856be6ae947a79ca21d24a33e7239","code":"SUCCESS","msg":"成功","names":["CPU使用率","内存使用率"],"vals":["7.00","10.00"],"plugName":["sysinfo","sysinfo"]}`,
+	},
+	{
+		"test6",
+		Spec("./test/test6.yaml"),
+		`{"msg":"成功","headers":{"qos":1,"oneofCase":5,"token":"kCBQLBlvOp+9fOsRWKN3VD6V5DSNgnpNnU2U1M6cOYg="},"code":"SUCCESS","fromMessageId":"","messageId":"f09856be6ae947a79ca21d24a33e7239","properties":[{"val":"7.00","name":"CPU使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}},{"val":"10.00","name":"内存使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}}],"timestamp":1642757411915}`,
+		`{"id":"f09856be6ae947a79ca21d24a33e7239","code":"SUCCESS","msg":"成功","datas":[{"name":"CPU使用率","val":"7.00","plugName":"sysinfo"},{"name":"内存使用率","val":"10.00","plugName":"sysinfo"}]}`,
+	},
+	{
+
 	},
 }
 
@@ -52,26 +67,16 @@ func TestGenerateDataDefine(t *testing.T) {
 
 	for _, testStruct := range mapperTest {
 		dataDefine, err := GenerateDataDefine(testStruct.Specification)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Equal(t, err, nil)
 
 		output, err := dataDefine.To([]byte(testStruct.Input))
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Equal(t, err, nil)
 
 		var m1 map[string]interface{}
 		var m2 map[string]interface{}
-		if err := json.Unmarshal(output, &m1); err != nil {
-			t.Fatal(err)
-		}
-		if err := json.Unmarshal([]byte(testStruct.Output), &m2); err != nil {
-			t.Fatal(err)
-		}
+		assert.Equal(t, json.Unmarshal(output, &m1), nil)
+		assert.Equal(t, json.Unmarshal([]byte(testStruct.Output), &m2), nil)
+		assert.Equal(t, m1, m2)
 
-		if !reflect.DeepEqual(m1, m2) {
-			t.Error(testStruct.ID)
-		}
 	}
 }

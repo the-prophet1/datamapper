@@ -2,10 +2,11 @@ package datamapper
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestStruct struct {
@@ -57,9 +58,6 @@ var mapperTest = []TestStruct{
 		Spec("./test/test6.yaml"),
 		`{"msg":"成功","headers":{"qos":1,"oneofCase":5,"token":"kCBQLBlvOp+9fOsRWKN3VD6V5DSNgnpNnU2U1M6cOYg="},"code":"SUCCESS","fromMessageId":"","messageId":"f09856be6ae947a79ca21d24a33e7239","properties":[{"val":"7.00","name":"CPU使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}},{"val":"10.00","name":"内存使用率","time":"1642757405418","desc":{"unit":"%","plugName":"sysinfo","source":"","type":"DOUBLE","group":"","quality":0}}],"timestamp":1642757411915}`,
 		`{"id":"f09856be6ae947a79ca21d24a33e7239","code":"SUCCESS","msg":"成功","datas":[{"name":"CPU使用率","val":"7.00","plugName":"sysinfo"},{"name":"内存使用率","val":"10.00","plugName":"sysinfo"}]}`,
-	},
-	{
-
 	},
 }
 

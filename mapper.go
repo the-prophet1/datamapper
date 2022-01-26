@@ -2,13 +2,14 @@ package datamapper
 
 import (
 	"encoding/json"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 var logger *log.Logger
@@ -80,42 +81,27 @@ func GenerateDataDefine(data []byte) (*DataDefine, error) {
 
 //IsNumber 判断数据规格是否为number
 func (d *DataSpec) IsNumber() bool {
-	if d.TypeRef == "number" {
-		return true
-	}
-	return false
+	return d.TypeRef == "number"
 }
 
 //IsString 判断数据规格是否为string
 func (d *DataSpec) IsString() bool {
-	if d.TypeRef == "string" {
-		return true
-	}
-	return false
+	return d.TypeRef == "string"
 }
 
 //IsComplex 判断数据规格是否为complex
 func (d *DataSpec) IsComplex() bool {
-	if d.Type == "complex" {
-		return true
-	}
-	return false
+	return d.Type == "complex"
 }
 
 //IsSimple 判断数据规格是否为simple
 func (d *DataSpec) IsSimple() bool {
-	if d.Type == "simple" {
-		return true
-	}
-	return false
+	return d.Type == "simple"
 }
 
 //IsArray 判断数据规格是否为array
 func (d *DataSpec) IsArray() bool {
-	if d.Multiple == "true" {
-		return true
-	}
-	return false
+	return d.Multiple == "true"
 }
 
 // To 将输入数据转换为源数据，再将源数据转换为目标数据
@@ -149,14 +135,14 @@ func getSourceData(sourceMap map[string]interface{}, paths []string) interface{}
 		return res
 	}
 
-	switch val.(type) {
+	switch val := val.(type) {
 	case number, string, []number, []string:
 		res = val
 	case map[string]interface{}:
-		res = getSourceData(val.(map[string]interface{}), paths[1:])
+		res = getSourceData(val, paths[1:])
 	case []map[string]interface{}:
 		sli := make([]interface{}, 0)
-		for _, m := range val.([]map[string]interface{}) {
+		for _, m := range val {
 			sli = append(sli, getSourceData(m, paths[1:]))
 		}
 		res = sli
@@ -249,11 +235,11 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 		}
 
 		length := 0
-		switch sourceData.(type) {
+		switch sourceData := sourceData.(type) {
 		case []number:
-			length = len(sourceData.([]number))
+			length = len(sourceData)
 		case []string:
-			length = len(sourceData.([]string))
+			length = len(sourceData)
 		}
 
 		targetPaths := strings.Split(target, ".")
@@ -407,9 +393,9 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 			// 如果input也是数组
 			if typ := reflect.TypeOf(inValue); typ.Kind() == reflect.Slice {
 				if def.IsComplex() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case []map[string]interface{}:
-						sliMap := inValue.([]map[string]interface{})
+						sliMap := inValue
 						slim := make([]map[string]interface{}, 0)
 						for _, m := range sliMap {
 							e := d.ParseSource(d.Complex[def.TypeRef], m)
@@ -418,7 +404,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						def.Count = len(slim)
 						res[key] = slim
 					case []interface{}:
-						sliMap := inValue.([]interface{})
+						sliMap := inValue
 						slim := make([]map[string]interface{}, 0)
 						for _, v := range sliMap {
 							m, ok := v.(map[string]interface{})
@@ -457,7 +443,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						}
 					}
 
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case []string:
 						if def.IsString() { // 类型匹配，直接赋值
 							res[key] = inValue
@@ -465,7 +451,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						if def.IsNumber() {
 							// 类型不匹配，尝试将string转为float
 							slif := make([]number, 0)
-							for _, s := range inValue.([]string) {
+							for _, s := range inValue {
 								f, err := strconv.ParseFloat(s, 64)
 								if err != nil {
 									logger.Warn(err)
@@ -481,7 +467,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						if def.IsString() {
 							// 类型不匹配，尝试将float转为string
 							slis := make([]string, 0)
-							for _, f := range inValue.([]number) {
+							for _, f := range inValue {
 								s := strconv.FormatFloat(f, 'f', -1, 64)
 								slis = append(slis, s)
 							}
@@ -494,9 +480,9 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 			} else {
 				// 此时输入为对象或简单数据类型
 				if def.IsComplex() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case map[string]interface{}:
-						m := inValue.(map[string]interface{})
+						m := inValue
 						c := d.ParseSource(d.Complex[def.TypeRef], m)
 						sli := make([]map[string]interface{}, 0)
 						res[key] = append(sli, c)
@@ -505,13 +491,13 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 					}
 				}
 				if def.IsSimple() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case string:
 						if def.IsString() {
-							res[key] = []string{inValue.(string)}
+							res[key] = []string{inValue}
 						}
 						if def.IsNumber() {
-							f, err := strconv.ParseFloat(inValue.(string), 64)
+							f, err := strconv.ParseFloat(inValue, 64)
 							if err != nil {
 								logger.Warn(err)
 							}
@@ -519,10 +505,10 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						}
 					case number:
 						if def.IsNumber() {
-							res[key] = []number{inValue.(number)}
+							res[key] = []number{inValue}
 						}
 						if def.IsString() {
-							s := strconv.FormatFloat(inValue.(number), 'f', -1, 64)
+							s := strconv.FormatFloat(inValue, 'f', -1, 64)
 							res[key] = []string{s}
 						}
 					default:
@@ -533,9 +519,9 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 		} else {
 			if typ := reflect.TypeOf(inValue); typ.Kind() == reflect.Slice {
 				if def.IsComplex() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case []map[string]interface{}:
-						slim := inValue.([]map[string]interface{})
+						slim := inValue
 						if len(slim) == 0 {
 							res[key] = nil
 						} else {
@@ -546,9 +532,9 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 					}
 				}
 				if def.IsSimple() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case []string:
-						strs := inValue.([]string)
+						strs := inValue
 						if len(strs) == 0 {
 							res[key] = nil
 						} else {
@@ -564,7 +550,7 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 							}
 						}
 					case []number:
-						floats := inValue.([]number)
+						floats := inValue
 						if len(floats) == 0 {
 							res[key] = nil
 						} else {
@@ -582,23 +568,22 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 				}
 			} else {
 				if def.IsComplex() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case map[string]interface{}:
-						m := inValue.(map[string]interface{})
-						c := d.ParseSource(d.Complex[def.TypeRef], m)
+						c := d.ParseSource(d.Complex[def.TypeRef], inValue)
 						res[key] = c
 					default:
 						logger.Warn("can't parse value type: ", reflect.TypeOf(inValue).String())
 					}
 				}
 				if def.IsSimple() {
-					switch inValue.(type) {
+					switch inValue := inValue.(type) {
 					case string:
 						if def.IsString() {
-							res[key] = inValue.(string)
+							res[key] = inValue
 						}
 						if def.IsNumber() {
-							f, err := strconv.ParseFloat(inValue.(string), 64)
+							f, err := strconv.ParseFloat(inValue, 64)
 							if err != nil {
 								logger.Warn(err)
 							}
@@ -606,10 +591,10 @@ func (d *DataDefine) ParseSource(complexDefine ComplexDefine, inputMap map[strin
 						}
 					case number:
 						if def.IsNumber() {
-							res[key] = inValue.(number)
+							res[key] = inValue
 						}
 						if def.IsString() {
-							s := strconv.FormatFloat(inValue.(number), 'f', -1, 64)
+							s := strconv.FormatFloat(inValue, 'f', -1, 64)
 							res[key] = s
 						}
 					default:

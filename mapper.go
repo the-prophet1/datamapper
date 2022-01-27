@@ -2,23 +2,24 @@ package datamapper
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
 
-var logger *log.Logger
-
+//TypeUnmarshalHandle 类型解析函数
+type TypeUnmarshalHandle = func(data []byte, v interface{}) error
 type number = float64
 
-func init() {
-	logger = log.New()
-	logger.SetReportCaller(true)
+//Logger 实现该接口来替换datamapper的日志器
+type Logger interface {
+	Warn(args ...interface{})
 }
 
 //Specification 实现该接口用以完成从持久层获取对应得规格信息
@@ -26,8 +27,34 @@ type Specification interface {
 	Get(name string) ([]byte, error)
 }
 
+//默认的日志器
+type defautlLog struct{}
+
+//Warn 实现Logger
+func (defautlLog) Warn(args ...interface{}) {
+	log.Println(args...)
+}
+
+var (
+	logger           Logger
+
+	//针对不同的数据类型解析策略，通过添加对应的解析器拓展解析的功能
+	SourceTypeDefine = map[string]TypeUnmarshalHandle{
+		"json": json.Unmarshal,
+	}
+)
+
+func init() {
+	logger = defautlLog{}
+}
+
+//ReplaceLogger 替换datamapper默认的日志器
+func ReplaceLogger(replace Logger) {
+	logger = replace
+}
+
 //NewSpecification 默认返回一个从文件中读取规格信息的读取器
-func NewSpecification() Specification {
+func NewSpecFileReader() Specification {
 	return &FileReader{}
 }
 
@@ -74,6 +101,7 @@ type DataDefine struct {
 func GenerateDataDefine(data []byte) (*DataDefine, error) {
 	var define DataDefine
 	if err := yaml.Unmarshal(data, &define); err != nil {
+		logger.Warn("parse data define error:", err.Error())
 		return nil, err
 	}
 	return &define, nil
@@ -104,21 +132,34 @@ func (d *DataSpec) IsArray() bool {
 	return d.Multiple == "true"
 }
 
+//parseSourceType 根据sourceType找到对应的handle函数解析input数据并返回
+func parseSourceType(sourceType string, input []byte) (map[string]interface{}, error) {
+	var inputMap map[string]interface{}
+	var allDefines []string
+	for define, handle := range SourceTypeDefine {
+		allDefines = append(allDefines, define)
+		if define == sourceType {
+			if err := handle(input, &inputMap); err != nil {
+				return nil, err
+			}
+			return inputMap, nil
+		}
+	}
+	return nil, fmt.Errorf("sourceType not any of them: %v", allDefines)
+}
+
 // To 将输入数据转换为源数据，再将源数据转换为目标数据
 func (d *DataDefine) To(input []byte) ([]byte, error) {
-	if d.SourceType != "json" {
-		panic("not implemented")
-	}
-
-	// 获取数据数据的map
-	var inputMap map[string]interface{}
-	if err := json.Unmarshal(input, &inputMap); err != nil {
+	// 获取数据的map
+	inputMap, err := parseSourceType(d.SourceType, input)
+	if err != nil {
+		logger.Warn("parse input data error: ", err)
 		return nil, err
 	}
 
 	sourceMap := d.ParseSource(d.Source, inputMap)
-	targetMap := d.generateMap(d.Target)
-	d.mapping(sourceMap, targetMap)
+	targetMap := d.GenerateMap(d.Target)
+	d.Mapping(sourceMap, targetMap)
 
 	return json.Marshal(targetMap)
 }
@@ -205,7 +246,9 @@ func Clone(source interface{}) interface{} {
 	return dst.Interface()                    //返回值
 }
 
-func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[string]*interface{}) {
+//Mapping 将sourceMap的数据值映射到targetMap
+//targetMap的value值需要使用指针类型，用于修改指向的interface{}结果值，从而改变value的值。
+func (d *DataDefine) Mapping(sourceMap map[string]interface{}, targetMap map[string]*interface{}) {
 
 	for source, target := range d.Mapper {
 		sourcePaths := strings.Split(source, ".")
@@ -333,13 +376,15 @@ func (d *DataDefine) mapping(sourceMap map[string]interface{}, targetMap map[str
 	}
 }
 
-func (d *DataDefine) generateMap(complexDefine ComplexDefine) map[string]*interface{} {
+//GenerateMap 根据complexDefine定义生成对应的map[string]*interface
+//对应生成的map，如果存在数组则会自动包含一个元素
+func (d *DataDefine) GenerateMap(complexDefine ComplexDefine) map[string]*interface{} {
 	res := make(map[string]*interface{})
 	for key, def := range complexDefine {
 		if def.IsArray() {
 			if def.IsComplex() {
 				val := make([]map[string]*interface{}, 0)
-				val = append(val, d.generateMap(d.Complex[def.TypeRef]))
+				val = append(val, d.GenerateMap(d.Complex[def.TypeRef]))
 				var vals interface{} = val
 				res[key] = &vals
 			}
@@ -359,7 +404,7 @@ func (d *DataDefine) generateMap(complexDefine ComplexDefine) map[string]*interf
 			}
 		} else {
 			if def.IsComplex() {
-				var val interface{} = d.generateMap(d.Complex[def.TypeRef])
+				var val interface{} = d.GenerateMap(d.Complex[def.TypeRef])
 				res[key] = &val
 			}
 			if def.IsSimple() {

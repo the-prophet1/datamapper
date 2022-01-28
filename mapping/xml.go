@@ -4,20 +4,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"reflect"
+
+	"github.com/clbanning/mxj/v2"
 )
 
-type XmlMap struct {
-	m map[string]interface{}
-}
 
-func (m *XmlMap) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	m.m = make(map[string]interface{})
-
-	for {
-
-	}
-	return nil
-}
 
 func XMLUnmarshal(data []byte, v interface{}) error {
 	if err := xml.Unmarshal(data, v); err == nil {
@@ -26,15 +17,16 @@ func XMLUnmarshal(data []byte, v interface{}) error {
 
 	// 此时默认的xml转换器已经无法满足需求
 	// 判断v的值是否为map[string]interface{} point
-	xmlmap, ok := v.(map[string]interface{})
+	m, ok := v.(*map[string]interface{})
 	if !ok {
 		return fmt.Errorf("can't unmarshal xml to %s", reflect.TypeOf(v).String())
 	}
 
-	xm := &XmlMap{m: xmlmap}
-
-	if err := xml.Unmarshal(data, xm); err == nil {
+	mv, err := mxj.NewMapXml(data) // unmarshal
+	if err != nil {
 		return err
 	}
+
+	*m = mv
 	return nil
 }

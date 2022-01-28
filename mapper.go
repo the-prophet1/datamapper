@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/the-prophet1/datamapper/mapping"
 	"gopkg.in/yaml.v2"
 )
 
@@ -36,11 +37,12 @@ func (defautlLog) Warn(args ...interface{}) {
 }
 
 var (
-	logger           Logger
+	logger Logger
 
 	//针对不同的数据类型解析策略，通过添加对应的解析器拓展解析的功能
 	SourceTypeDefine = map[string]TypeUnmarshalHandle{
 		"json": json.Unmarshal,
+		"xml":  mapping.XMLUnmarshal,
 	}
 )
 

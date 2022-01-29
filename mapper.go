@@ -39,7 +39,7 @@ func (defautlLog) Warn(args ...interface{}) {
 var (
 	logger Logger
 
-	//针对不同的数据类型解析策略，通过添加对应的解析器拓展解析的功能
+	//SourceTypeDefine 针对不同的数据类型解析策略，通过添加对应的解析器拓展解析的功能
 	SourceTypeDefine = map[string]TypeUnmarshalHandle{
 		"json": json.Unmarshal,
 		"xml":  mapping.XMLUnmarshal,
@@ -55,7 +55,7 @@ func ReplaceLogger(replace Logger) {
 	logger = replace
 }
 
-//NewSpecification 默认返回一个从文件中读取规格信息的读取器
+//NewSpecFileReader 默认返回一个从文件中读取规格信息的读取器
 func NewSpecFileReader() Specification {
 	return &FileReader{}
 }

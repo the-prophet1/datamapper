@@ -1,7 +1,6 @@
 package datamapper
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,12 +9,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/the-prophet1/datamapper/mapping"
+	"github.com/the-prophet1/datamapper/mapping/json"
+	"github.com/the-prophet1/datamapper/mapping/xml"
 	"gopkg.in/yaml.v2"
 )
 
 //TypeUnmarshalHandle 类型解析函数
 type TypeUnmarshalHandle = func(data []byte, v interface{}) error
+type TypeMarshalHandle = func(v interface{}) ([]byte, error)
 type number = float64
 
 //Logger 实现该接口来替换datamapper的日志器
@@ -23,16 +24,16 @@ type Logger interface {
 	Warn(args ...interface{})
 }
 
-//Specification 实现该接口用以完成从持久层获取对应得规格信息
+//Specification 实现该接口用以完成从数据源获取对应得规格信息
 type Specification interface {
 	Get(name string) ([]byte, error)
 }
 
 //默认的日志器
-type defautlLog struct{}
+type defaultLog struct{}
 
 //Warn 实现Logger
-func (defautlLog) Warn(args ...interface{}) {
+func (defaultLog) Warn(args ...interface{}) {
 	log.Println(args...)
 }
 
@@ -42,12 +43,17 @@ var (
 	//SourceTypeDefine 针对不同的数据类型解析策略，通过添加对应的解析器拓展解析的功能
 	SourceTypeDefine = map[string]TypeUnmarshalHandle{
 		"json": json.Unmarshal,
-		"xml":  mapping.XMLUnmarshal,
+		"xml":  xml.Unmarshal,
+	}
+
+	TargetTypeDefine = map[string]TypeMarshalHandle{
+		"json": json.Marshal,
+		"xml":  xml.Marshal,
 	}
 )
 
 func init() {
-	logger = defautlLog{}
+	logger = defaultLog{}
 }
 
 //ReplaceLogger 替换datamapper默认的日志器
@@ -150,6 +156,22 @@ func parseSourceType(sourceType string, input []byte) (map[string]interface{}, e
 	return nil, fmt.Errorf("sourceType not any of them: %v", allDefines)
 }
 
+func parseTargetType(targetType string, output interface{}) ([]byte, error) {
+	var allDefines []string
+	for define, handle := range TargetTypeDefine {
+		allDefines = append(allDefines, define)
+		if define == targetType {
+			if outputData, err := handle(output); err != nil {
+				return nil, err
+			} else {
+				return outputData, nil
+			}
+
+		}
+	}
+	return nil, fmt.Errorf("sourceType not any of them: %v", allDefines)
+}
+
 // To 将输入数据转换为源数据，再将源数据转换为目标数据
 func (d *DataDefine) To(input []byte) ([]byte, error) {
 	// 获取数据的map
@@ -163,7 +185,7 @@ func (d *DataDefine) To(input []byte) ([]byte, error) {
 	targetMap := d.GenerateMap(d.Target)
 	d.Mapping(sourceMap, targetMap)
 
-	return json.Marshal(targetMap)
+	return parseTargetType(d.TargetType, targetMap)
 }
 
 func getSourceData(sourceMap map[string]interface{}, paths []string) interface{} {
@@ -212,6 +234,10 @@ func getTargetData(targetMap map[string]*interface{}, paths []string, length int
 	case map[string]*interface{}:
 		res = getTargetData((*val).(map[string]*interface{}), paths[1:], length)
 	case []map[string]*interface{}:
+		if length == 0 {
+			// 将val置为长度为0的切片
+			*val = make([]map[string]*interface{}, 0)
+		}
 		// 扩展对象数组
 		sli := (*val).([]map[string]*interface{})
 		if len(sli) != length {
@@ -236,16 +262,16 @@ func getTargetData(targetMap map[string]*interface{}, paths []string, length int
 func Clone(source interface{}) interface{} {
 	typ := reflect.TypeOf(source)
 	if typ.Kind() == reflect.Ptr { //如果是指针类型
-		typ = typ.Elem()                          //获取源实际类型(否则为指针类型)
-		dst := reflect.New(typ).Elem()            //创建对象
-		b, _ := json.Marshal(source)              //导出json
-		json.Unmarshal(b, dst.Addr().Interface()) //json序列化
-		return dst.Addr().Interface()             //返回指针
+		typ = typ.Elem()                              //获取源实际类型(否则为指针类型)
+		dst := reflect.New(typ).Elem()                //创建对象
+		b, _ := json.Marshal(source)                  //导出json
+		_ = json.Unmarshal(b, dst.Addr().Interface()) //json序列化
+		return dst.Addr().Interface()                 //返回指针
 	}
-	dst := reflect.New(typ).Elem()            //创建对象
-	b, _ := json.Marshal(source)              //导出json
-	json.Unmarshal(b, dst.Addr().Interface()) //json序列化
-	return dst.Interface()                    //返回值
+	dst := reflect.New(typ).Elem()                //创建对象
+	b, _ := json.Marshal(source)                  //导出json
+	_ = json.Unmarshal(b, dst.Addr().Interface()) //json序列化
+	return dst.Interface()                        //返回值
 }
 
 //Mapping 将sourceMap的数据值映射到targetMap
@@ -294,7 +320,7 @@ func (d *DataDefine) Mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		_, sourceOk := sourceData.(number)
 		_, targetOk := (*targetData).(number)
-		// 当都为float64
+		// 当都为number
 		if sourceOk && targetOk {
 			*targetData = sourceData
 		}
@@ -329,7 +355,7 @@ func (d *DataDefine) Mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		_, sourceOk = sourceData.([]number)
 		_, targetOk = (*targetData).([]string)
-		// source: number,target: string
+		// source: []number,target: []string
 		if sourceOk && targetOk {
 			sli := make([]string, 0)
 			for _, f := range sourceData.([]number) {

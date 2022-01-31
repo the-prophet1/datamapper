@@ -1,0 +1,61 @@
+sourceType: json
+targetType: xml
+source: #来源元数据定义
+  id:
+    type: simple
+    typeRef: string
+    multiple: false
+  description:
+    type: simple
+    typeRef: string
+    multiple: false
+  data:
+    type: complex
+    typeRef: data
+    multiple: false
+target: #目标元数据定义
+  va:
+    type: complex
+    typeRef: va
+    multiple: false
+complex:
+  data:
+    voltage:
+      type: simple
+      typeRef: number
+      multiple: false
+    current:
+      type: simple
+      typeRef: number
+      multiple: false
+    power:
+      type: simple
+      typeRef: number
+      multiple: false
+  va:
+    id:
+      type: simple
+      typeRef: string
+      multiple: false
+    description:
+      type: simple
+      typeRef: string
+      multiple: false
+    V:
+      type: simple
+      typeRef: number
+      multiple: false
+    A:
+      type: simple
+      typeRef: number
+      multiple: false
+    P:
+      type: simple
+      typeRef: number
+      multiple: false
+mapper: #元数据映射
+  id: va.id
+  description: va.description
+  data.voltage: va.V
+  data.current: va.A
+  data.power: va.P

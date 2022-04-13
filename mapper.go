@@ -315,91 +315,54 @@ func (d *DataDefine) Mapping(sourceMap map[string]interface{}, targetMap map[str
 
 		targetPaths := strings.Split(target, ".")
 		targetData := getTargetData(targetMap, targetPaths, length)
-
+		sourceValue := reflect.Indirect(reflect.ValueOf(sourceData))
+		targetValue := reflect.Indirect(reflect.ValueOf(*targetData))
 		// 此时sourceData和targetData必须为简单类型
-
-		_, sourceOk := sourceData.(number)
-		_, targetOk := (*targetData).(number)
-		// 当都为number
-		if sourceOk && targetOk {
+		if sourceValue.Kind() == targetValue.Kind() && (sourceValue.Kind() == reflect.String || sourceValue.Kind() == reflect.Float64) {
 			*targetData = sourceData
-		}
+		} else if sourceValue.Kind() == targetValue.Kind() && sourceValue.Kind() == reflect.Slice {
+			//都是切片的情况
+			if sourceValue.Type().Elem().Kind() == targetValue.Type().Elem().Kind() { //类型相同
+				*targetData = sourceData
+			} else if sourceValue.Type().Elem().Kind() == reflect.Float64 &&
+				targetValue.Type().Elem().Kind() == reflect.String {
+				sli := make([]string, 0)
+				for _, f := range sourceData.([]number) {
+					sf := strconv.FormatFloat(f, 'f', -1, 64)
+					sli = append(sli, sf)
+				}
+				*targetData = sli
+			} else if sourceValue.Type().Elem().Kind() == reflect.String &&
+				targetValue.Type().Elem().Kind() == reflect.Float64 {
+				sli := make([]number, 0)
+				for _, s := range sourceData.([]string) {
+					sf, _ := strconv.ParseFloat(s, 64)
+					sli = append(sli, sf)
+				}
+				*targetData = sli
+			} else if targetValue.Type().Elem().Kind() == reflect.Ptr {
+				sf, sourceOk := sourceData.([]number)
+				t, targetOk := (*targetData).([]*interface{})
+				// 当source为[]number,target为[]*interface{}
+				if sourceOk && targetOk {
+					for i, f := range sf {
+						*t[i] = f
+					}
+				}
 
-		_, sourceOk = sourceData.(number)
-		_, targetOk = (*targetData).(string)
-		// source: number,target: string
-		if sourceOk && targetOk {
+				ss, sourceOk := sourceData.([]string)
+				t, targetOk = (*targetData).([]*interface{})
+				// 当source为[]string,target为[]*interface{}
+				if sourceOk && targetOk {
+					for i, f := range ss {
+						*t[i] = f
+					}
+				}
+			}
+		} else if sourceValue.Kind() == reflect.Float64 && targetValue.Kind() == reflect.String {
 			*targetData = strconv.FormatFloat(sourceData.(number), 'f', -1, 64)
-		}
-
-		_, sourceOk = sourceData.(string)
-		_, targetOk = (*targetData).(number)
-		// source: string,target: number
-		if sourceOk && targetOk {
+		} else if sourceValue.Kind() == reflect.String && targetValue.Kind() == reflect.Float64 {
 			*targetData, _ = strconv.ParseFloat(sourceData.(string), 64)
-		}
-
-		_, sourceOk = sourceData.(string)
-		_, targetOk = (*targetData).(string)
-		// 当都为string
-		if sourceOk && targetOk {
-			*targetData = sourceData
-		}
-
-		_, sourceOk = sourceData.(number)
-		_, targetOk = (*targetData).([]number)
-		// 当都为[]number
-		if sourceOk && targetOk {
-			*targetData = sourceData
-		}
-
-		_, sourceOk = sourceData.([]number)
-		_, targetOk = (*targetData).([]string)
-		// source: []number,target: []string
-		if sourceOk && targetOk {
-			sli := make([]string, 0)
-			for _, f := range sourceData.([]number) {
-				sf := strconv.FormatFloat(f, 'f', -1, 64)
-				sli = append(sli, sf)
-			}
-			*targetData = sli
-		}
-
-		_, sourceOk = sourceData.([]string)
-		_, targetOk = (*targetData).([]number)
-		// source: []string,target: []number
-		if sourceOk && targetOk {
-			sli := make([]number, 0)
-			for _, s := range sourceData.([]string) {
-				sf, _ := strconv.ParseFloat(s, 64)
-				sli = append(sli, sf)
-			}
-			*targetData = sli
-		}
-
-		_, sourceOk = sourceData.([]string)
-		_, targetOk = (*targetData).([]string)
-		// 当都为[]number
-		if sourceOk && targetOk {
-			*targetData = sourceData
-		}
-
-		sf, sourceOk := sourceData.([]number)
-		t, targetOk := (*targetData).([]*interface{})
-		// 当source为[]number,target为[]*interface{}
-		if sourceOk && targetOk {
-			for i, f := range sf {
-				*t[i] = f
-			}
-		}
-
-		ss, sourceOk := sourceData.([]string)
-		t, targetOk = (*targetData).([]*interface{})
-		// 当source为[]string,target为[]*interface{}
-		if sourceOk && targetOk {
-			for i, f := range ss {
-				*t[i] = f
-			}
 		}
 	}
 }
@@ -415,8 +378,7 @@ func (d *DataDefine) GenerateMap(complexDefine ComplexDefine) map[string]*interf
 				val = append(val, d.GenerateMap(d.Complex[def.TypeRef]))
 				var vals interface{} = val
 				res[key] = &vals
-			}
-			if def.IsSimple() {
+			} else if def.IsSimple() {
 				if def.IsNumber() {
 					val := make([]number, 0)
 					val = append(val, number(0))
@@ -434,8 +396,7 @@ func (d *DataDefine) GenerateMap(complexDefine ComplexDefine) map[string]*interf
 			if def.IsComplex() {
 				var val interface{} = d.GenerateMap(d.Complex[def.TypeRef])
 				res[key] = &val
-			}
-			if def.IsSimple() {
+			} else if def.IsSimple() {
 				if def.IsNumber() {
 					var val interface{} = number(0)
 					res[key] = &val
